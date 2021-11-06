@@ -472,23 +472,29 @@ pub mod aoc {
             val: i32,
         }
 
+        #[derive(Debug, Copy, Clone)]
+        struct AccumulatorInfo {
+            value: i32,
+            end_index: i32,
+        }
+
         pub fn solve(problem: super::Problem, filename: &str) -> i32 {
             let ops = lines_from_file(filename);
             let instructions: Vec<Instruction> =
                 ops.iter().map(|op| parse_instruction(op)).collect();
 
             match problem {
-                super::Problem::One => problem_one(&instructions),
-                super::Problem::Two => problem_two(&instructions),
+                super::Problem::One => problem_one(&instructions).value,
+                super::Problem::Two => problem_two(&instructions).unwrap(),
             }
         }
 
-        fn problem_one(instructions: &[Instruction]) -> i32 {
+        fn problem_one(instructions: &[Instruction]) -> AccumulatorInfo {
             let mut global_accumulator = 0;
             let mut visited: Vec<i32> = vec![];
             let mut line_num: i32 = 0;
 
-            while !visited.contains(&line_num) {
+            while (!visited.contains(&line_num)) && (line_num < instructions.len() as i32) {
                 visited.push(line_num);
                 let instr = instructions[line_num as usize];
                 match instr.op {
@@ -501,60 +507,36 @@ pub mod aoc {
                 }
             }
 
-            global_accumulator
+            AccumulatorInfo { value: global_accumulator, end_index: line_num }
         }
 
-        fn problem_two(instructions: &[Instruction]) -> i32 {
-            let jmp_nop_count = instructions.iter().filter(|&x| x.op != OpCode::Acc).count() as i32;
-            let mut start_search_index = 0;
-            let mut instruction_possibilities: Vec<Vec<Instruction>> = vec![];
-            for _i in 0..jmp_nop_count {
-                let mut temp = instructions.to_owned();
-                for j in start_search_index..instructions.len() {
-                    match instructions[j].op {
-                        OpCode::Jmp => {
-                            temp[j].op = OpCode::Nop;
-                            instruction_possibilities.push(temp);
-                            start_search_index = j + 1;
-                            break;
+        fn problem_two(instructions: &[Instruction]) -> Option<i32> {
+            let mut index = 0;
+            loop {
+                if index == instructions.len() {
+                    return None;
+                }
+                match instructions[index].op {
+                    OpCode::Jmp | OpCode::Nop => {
+                        let mut temp = instructions.to_owned();
+                        swap_jmp_and_nop(&mut temp, index);
+                        let accumulator = problem_one(&temp);
+                        if accumulator.end_index == temp.len() as i32 {
+                            return Some(accumulator.value);
                         }
-                        OpCode::Nop => {
-                            temp[j].op = OpCode::Jmp;
-                            instruction_possibilities.push(temp);
-                            start_search_index = j + 1;
-                            break;
-                        }
-                        _ => (),
+                        index += 1;
                     }
+                    _ => index += 1,
                 }
             }
+        }
 
-            let mut global_accumulator = 0;
-            for instruction_set in instruction_possibilities {
-                let mut visited: Vec<i32> = vec![];
-                let mut line_num = 0;
-                global_accumulator = 0;
-                loop {
-                    if visited.contains(&line_num) {
-                        break;
-                    } else if line_num >= instruction_set.len() as i32 {
-                        return global_accumulator;
-                    } else {
-                        visited.push(line_num);
-                        let instr = instruction_set[line_num as usize];
-                        match instr.op {
-                            OpCode::Acc => {
-                                global_accumulator += instr.val;
-                                line_num += 1;
-                            }
-                            OpCode::Jmp => line_num += instr.val,
-                            _ => line_num += 1,
-                        }
-                    }
-                }
+        fn swap_jmp_and_nop(instructions: &mut [Instruction], index: usize) {
+            match instructions[index].op {
+                OpCode::Jmp => instructions[index].op = OpCode::Nop,
+                OpCode::Nop => instructions[index].op = OpCode::Jmp,
+                _ => ()
             }
-
-            global_accumulator
         }
 
         fn parse_instruction(instr: &str) -> Instruction {
@@ -568,6 +550,74 @@ pub mod aoc {
                 .parse::<i32>()
                 .expect("Could not parse instruction value.");
             Instruction { op, val }
+        }
+    }
+
+    pub mod day_nine {
+        use crate::aoc::lines_from_file;
+        use itertools::Itertools;
+
+        #[derive(Debug, Copy, Clone)]
+        struct InvalidNumberInfo {
+            number: i64,
+            index: usize,
+        }
+
+        pub fn solve(problem: super::Problem, filename: &str) -> Option<i64> {
+            let numbers: Vec<i64> = lines_from_file(filename)
+                .iter()
+                .map(|x| x.parse().expect("Could not parse integer."))
+                .collect();
+
+            match problem {
+                super::Problem::One => Some(problem_one(&numbers)?.number),
+                super::Problem::Two => problem_two(&numbers),
+            }
+        }
+
+        fn problem_one(numbers: &[i64]) -> Option<InvalidNumberInfo> {
+            let window_size = 25;
+            for i in window_size..numbers.len() {
+                if !is_number_valid(numbers, i, window_size) {
+                    return Some(InvalidNumberInfo {
+                        number: numbers[i],
+                        index: i,
+                    });
+                }
+            }
+            None
+        }
+
+        fn is_number_valid(numbers: &[i64], index: usize, window_size: usize) -> bool {
+            let start = index - window_size;
+            let perms = numbers[start..index].iter().copied().permutations(2);
+            perms
+                .map(|p| p.iter().sum::<i64>())
+                .any(|x| x == numbers[index])
+        }
+
+        fn problem_two(numbers: &[i64]) -> Option<i64> {
+            let info = problem_one(&numbers)?;
+
+            let mut start_index = 0;
+            let mut end_index = 2;
+            loop {
+                let sum: i64 = numbers[start_index..end_index].iter().sum();
+                if (sum < info.number) && (end_index < info.index) {
+                    end_index += 1;
+                } else if (sum > info.number) || (end_index > info.index) {
+                    start_index += 1;
+                    end_index = start_index + 2;
+                } else if sum == info.number {
+                    let minmax = numbers[start_index..end_index]
+                        .iter()
+                        .minmax()
+                        .into_option()?;
+                    return Some(minmax.0 + minmax.1);
+                } else {
+                    return None;
+                }
+            }
         }
     }
 }
@@ -646,5 +696,14 @@ mod tests {
         let p2 = aoc::day_eight::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, 1528);
         assert_eq!(p2, 640);
+    }
+
+    #[test]
+    fn day_nine() {
+        let filename = "/home/alex/IdeaProjects/untitled/misc/D09.txt";
+        let p1 = aoc::day_nine::solve(aoc::Problem::One, filename).unwrap();
+        let p2 = aoc::day_nine::solve(aoc::Problem::Two, filename).unwrap();
+        assert_eq!(p1, 248131121);
+        assert_eq!(p2, 31580383);
     }
 }
