@@ -478,14 +478,14 @@ pub mod aoc {
             end_index: i32,
         }
 
-        pub fn solve(problem: super::Problem, filename: &str) -> i32 {
+        pub fn solve(problem: super::Problem, filename: &str) -> Option<i32> {
             let ops = lines_from_file(filename);
             let instructions: Vec<Instruction> =
                 ops.iter().map(|op| parse_instruction(op)).collect();
 
             match problem {
-                super::Problem::One => problem_one(&instructions).value,
-                super::Problem::Two => problem_two(&instructions).unwrap(),
+                super::Problem::One => Some(problem_one(&instructions).value),
+                super::Problem::Two => problem_two(&instructions),
             }
         }
 
@@ -507,7 +507,10 @@ pub mod aoc {
                 }
             }
 
-            AccumulatorInfo { value: global_accumulator, end_index: line_num }
+            AccumulatorInfo {
+                value: global_accumulator,
+                end_index: line_num,
+            }
         }
 
         fn problem_two(instructions: &[Instruction]) -> Option<i32> {
@@ -535,7 +538,7 @@ pub mod aoc {
             match instructions[index].op {
                 OpCode::Jmp => instructions[index].op = OpCode::Nop,
                 OpCode::Nop => instructions[index].op = OpCode::Jmp,
-                _ => ()
+                _ => (),
             }
         }
 
@@ -620,6 +623,75 @@ pub mod aoc {
             }
         }
     }
+
+    pub mod day_ten {
+        use crate::aoc::lines_from_file;
+        use itertools::Itertools;
+
+        pub fn solve(problem: super::Problem, filename: &str) -> Option<i64> {
+            let mut joltage_ratings: Vec<i32> = lines_from_file(filename)
+                .iter()
+                .map(|x| x.parse().expect("Could not parse integer."))
+                .sorted()
+                .collect();
+
+            joltage_ratings.insert(0, 0);
+            joltage_ratings.push(joltage_ratings.last().expect("Empty vector.") + 3);
+
+            let mut differences: Vec<i32> = vec![];
+            for i in 1..joltage_ratings.len() {
+                differences.push(joltage_ratings[i] - joltage_ratings[i - 1]);
+            }
+
+            match problem {
+                super::Problem::One => problem_one(&differences),
+                super::Problem::Two => problem_two(&differences),
+            }
+        }
+
+        fn problem_one(differences: &[i32]) -> Option<i64> {
+            Some(
+                differences.iter().filter(|x| **x == 1).count() as i64
+                    * differences.iter().filter(|x| **x == 3).count() as i64,
+            )
+        }
+
+        fn problem_two(differences: &[i32]) -> Option<i64> {
+            Some(
+                differences
+                    .split(|num| *num == 3)
+                    .filter(|n| !n.is_empty())
+                    .map(|x| calculate_combinations(x.len() as i64))
+                    .product(),
+            )
+        }
+
+        fn calculate_combinations(num: i64) -> i64 {
+            let total = num - 1;
+            let mut num_choices = total;
+            let mut num_combinations = 0;
+            loop {
+                if (total - num_choices > 2) || (num_choices < 0) {
+                    break;
+                } else if num_choices == 0 {
+                    num_combinations += 1;
+                    break;
+                } else {
+                    num_combinations += count_combinations(total, num_choices);
+                    num_choices -= 1;
+                }
+            }
+            num_combinations
+        }
+
+        fn count_combinations(n: i64, r: i64) -> i64 {
+            if r > n {
+                0
+            } else {
+                (1..=r).fold(1, |acc, val| acc * (n - val + 1) / val)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -628,7 +700,7 @@ mod tests {
 
     #[test]
     fn day_one() {
-        let filename = "/home/alex/IdeaProjects/untitled/misc/D01.txt";
+        let filename = "./misc/D01.txt";
         let p1 = aoc::day_one::solve(aoc::Problem::One, filename);
         let p2 = aoc::day_one::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, 800139);
@@ -637,7 +709,7 @@ mod tests {
 
     #[test]
     fn day_two() {
-        let filename = "/home/alex/IdeaProjects/untitled/misc/D02.txt";
+        let filename = "./misc/D02.txt";
         let p1 = aoc::day_two::solve(aoc::Problem::One, filename);
         let p2 = aoc::day_two::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, 515);
@@ -646,7 +718,7 @@ mod tests {
 
     #[test]
     fn day_three() {
-        let filename = "/home/alex/IdeaProjects/untitled/misc/D03.txt";
+        let filename = "./misc/D03.txt";
         let p1 = aoc::day_three::solve(aoc::Problem::One, filename);
         let p2 = aoc::day_three::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, 220);
@@ -655,7 +727,7 @@ mod tests {
 
     #[test]
     fn day_four() {
-        let filename = "/home/alex/IdeaProjects/untitled/misc/D04.txt";
+        let filename = "./misc/D04.txt";
         let p1 = aoc::day_four::solve(aoc::Problem::One, filename);
         let p2 = aoc::day_four::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, 239);
@@ -664,7 +736,7 @@ mod tests {
 
     #[test]
     fn day_five() {
-        let filename = "/home/alex/IdeaProjects/untitled/misc/D05.txt";
+        let filename = "./misc/D05.txt";
         let p1 = aoc::day_five::solve(aoc::Problem::One, filename);
         let p2 = aoc::day_five::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, 892);
@@ -673,7 +745,7 @@ mod tests {
 
     #[test]
     fn day_six() {
-        let filename = "/home/alex/IdeaProjects/untitled/misc/D06.txt";
+        let filename = "./misc/D06.txt";
         let p1 = aoc::day_six::solve(aoc::Problem::One, filename);
         let p2 = aoc::day_six::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, 6351);
@@ -682,7 +754,7 @@ mod tests {
 
     #[test]
     fn day_seven() {
-        let filename = "/home/alex/IdeaProjects/untitled/misc/D07.txt";
+        let filename = "./misc/D07.txt";
         let p1 = aoc::day_seven::solve(aoc::Problem::One, filename);
         let p2 = aoc::day_seven::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, 252);
@@ -691,19 +763,28 @@ mod tests {
 
     #[test]
     fn day_eight() {
-        let filename = "/home/alex/IdeaProjects/untitled/misc/D08.txt";
+        let filename = "./misc/D08.txt";
         let p1 = aoc::day_eight::solve(aoc::Problem::One, filename);
         let p2 = aoc::day_eight::solve(aoc::Problem::Two, filename);
-        assert_eq!(p1, 1528);
-        assert_eq!(p2, 640);
+        assert_eq!(p1, Some(1528));
+        assert_eq!(p2, Some(640));
     }
 
     #[test]
     fn day_nine() {
-        let filename = "/home/alex/IdeaProjects/untitled/misc/D09.txt";
-        let p1 = aoc::day_nine::solve(aoc::Problem::One, filename).unwrap();
-        let p2 = aoc::day_nine::solve(aoc::Problem::Two, filename).unwrap();
-        assert_eq!(p1, 248131121);
-        assert_eq!(p2, 31580383);
+        let filename = "./misc/D09.txt";
+        let p1 = aoc::day_nine::solve(aoc::Problem::One, filename);
+        let p2 = aoc::day_nine::solve(aoc::Problem::Two, filename);
+        assert_eq!(p1, Some(248131121));
+        assert_eq!(p2, Some(31580383));
+    }
+
+    #[test]
+    fn day_ten() {
+        let filename = "./misc/D10.txt";
+        let p1 = aoc::day_ten::solve(aoc::Problem::One, filename);
+        let p2 = aoc::day_ten::solve(aoc::Problem::Two, filename);
+        assert_eq!(p1, Some(1980));
+        assert_eq!(p2, Some(4628074479616));
     }
 }
