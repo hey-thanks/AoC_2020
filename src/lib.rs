@@ -692,6 +692,283 @@ pub mod aoc {
             }
         }
     }
+
+    pub mod day_eleven {
+        use crate::aoc::lines_from_file;
+
+        #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+        pub enum Seat {
+            Empty,
+            Occupied,
+        }
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        struct Grid {
+            num_rows: usize,
+            num_cols: usize,
+            layout: Vec<Vec<Option<Seat>>>,
+        }
+
+        impl Grid {
+            fn initialize(filename: &str) -> Grid {
+                let positions = lines_from_file(filename);
+                let mut layout: Vec<Vec<Option<Seat>>> = vec![];
+                for pos in &positions {
+                    layout.push(
+                        pos.chars()
+                            .map(|c| match c {
+                                'L' => Some(Seat::Empty),
+                                '#' => Some(Seat::Occupied),
+                                _ => None,
+                            })
+                            .collect(),
+                    );
+                }
+                Grid {
+                    num_rows: positions.len(),
+                    num_cols: positions[0].len(),
+                    layout,
+                }
+            }
+
+            fn next(&mut self, problem: super::Problem) {
+                match problem {
+                    super::Problem::One => self.p1_next(),
+                    super::Problem::Two => self.p2_next(),
+                }
+            }
+
+            fn p1_next(&mut self) {
+                let temp = self.clone();
+                for i in 0..temp.num_rows {
+                    for j in 0..temp.num_cols {
+                        let num_occupied = temp.count_occupied_adjacent_seats(i, j);
+                        match temp.layout[i][j] {
+                            Some(Seat::Empty) => {
+                                if num_occupied == 0 {
+                                    self.layout[i][j] = Some(Seat::Occupied);
+                                }
+                            }
+                            Some(Seat::Occupied) => {
+                                if num_occupied >= 4 {
+                                    self.layout[i][j] = Some(Seat::Empty);
+                                }
+                            }
+                            None => (),
+                        };
+                    }
+                }
+            }
+
+            fn p2_next(&mut self) {
+                let temp = self.clone();
+                for i in 0..temp.num_rows {
+                    for j in 0..temp.num_cols {
+                        let num_occupied = temp.count_visible_occupied_seats(i, j);
+                        match temp.layout[i][j] {
+                            Some(Seat::Empty) => {
+                                if num_occupied == 0 {
+                                    self.layout[i][j] = Some(Seat::Occupied);
+                                }
+                            }
+                            Some(Seat::Occupied) => {
+                                if num_occupied >= 5 {
+                                    self.layout[i][j] = Some(Seat::Empty);
+                                }
+                            }
+                            None => (),
+                        };
+                    }
+                }
+            }
+
+            fn count_visible_occupied_seats(&self, row: usize, col: usize) -> usize {
+                self.count_horizontal(row, col)
+                    + self.count_vertical(row, col)
+                    + self.count_diagonal_sw_ne(row, col)
+                    + self.count_diagonal_nw_se(row, col)
+            }
+
+            fn count_horizontal(&self, row: usize, col: usize) -> usize {
+                let mut total = 0;
+                for j in col + 1..self.num_cols {
+                    match self.layout[row][j] {
+                        Some(Seat::Occupied) => {
+                            total += 1;
+                            break;
+                        }
+                        Some(Seat::Empty) => break,
+                        _ => (),
+                    }
+                }
+                for j in (0..col).rev() {
+                    match self.layout[row][j] {
+                        Some(Seat::Occupied) => {
+                            total += 1;
+                            break;
+                        }
+                        Some(Seat::Empty) => break,
+                        _ => (),
+                    }
+                }
+                total
+            }
+
+            fn count_vertical(&self, row: usize, col: usize) -> usize {
+                let mut total = 0;
+                for i in row + 1..self.num_rows {
+                    match self.layout[i][col] {
+                        Some(Seat::Occupied) => {
+                            total += 1;
+                            break;
+                        }
+                        Some(Seat::Empty) => break,
+                        _ => (),
+                    }
+                }
+                for i in (0..row).rev() {
+                    match self.layout[i][col] {
+                        Some(Seat::Occupied) => {
+                            total += 1;
+                            break;
+                        }
+                        Some(Seat::Empty) => break,
+                        _ => (),
+                    }
+                }
+                total
+            }
+
+            fn count_diagonal_sw_ne(&self, row: usize, col: usize) -> usize {
+                let mut total = 0;
+                for (i, j) in (0..row).rev().zip(col + 1..self.num_cols) {
+                    match self.layout[i][j] {
+                        Some(Seat::Occupied) => {
+                            total += 1;
+                            break;
+                        }
+                        Some(Seat::Empty) => break,
+                        _ => (),
+                    }
+                }
+                for (i, j) in (row + 1..self.num_rows).zip((0..col).rev()) {
+                    match self.layout[i][j] {
+                        Some(Seat::Occupied) => {
+                            total += 1;
+                            break;
+                        }
+                        Some(Seat::Empty) => break,
+                        _ => (),
+                    }
+                }
+                total
+            }
+
+            fn count_diagonal_nw_se(&self, row: usize, col: usize) -> usize {
+                let mut total = 0;
+                for (i, j) in (0..row).rev().zip((0..col).rev()) {
+                    match self.layout[i][j] {
+                        Some(Seat::Occupied) => {
+                            total += 1;
+                            break;
+                        }
+                        Some(Seat::Empty) => break,
+                        _ => (),
+                    }
+                }
+                for (i, j) in (row + 1..self.num_rows).zip(col + 1..self.num_cols) {
+                    match self.layout[i][j] {
+                        Some(Seat::Occupied) => {
+                            total += 1;
+                            break;
+                        }
+                        Some(Seat::Empty) => break,
+                        _ => (),
+                    }
+                }
+                total
+            }
+
+            fn count_occupied_adjacent_seats(&self, row: usize, col: usize) -> usize {
+                let mut rows_to_check = vec![row];
+                if row > 0 {
+                    rows_to_check.push(row - 1);
+                }
+                if row < self.num_rows - 1 {
+                    rows_to_check.push(row + 1);
+                }
+
+                let mut cols_to_check = vec![col];
+                if col > 0 {
+                    cols_to_check.push(col - 1);
+                }
+                if col < self.num_cols - 1 {
+                    cols_to_check.push(col + 1);
+                }
+
+                let mut total_occupied = 0;
+
+                for i_row in &rows_to_check {
+                    for j_col in &cols_to_check {
+                        if *i_row == row && *j_col == col {
+                            continue;
+                        }
+                        if let Some(Seat::Occupied) = self.layout[*i_row][*j_col] {
+                            total_occupied += 1
+                        }
+                    }
+                }
+
+                total_occupied
+            }
+
+            fn total_occupied(&self) -> usize {
+                let mut total_occupied = 0;
+                for i in 0..self.num_rows {
+                    for j in 0..self.num_cols {
+                        if let Some(Seat::Occupied) = self.layout[i][j] {
+                            total_occupied += 1
+                        }
+                    }
+                }
+
+                total_occupied
+            }
+        }
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        struct State {
+            round: usize,
+            grid: Grid,
+        }
+
+        impl State {
+            fn initialize(grid: Grid) -> State {
+                State { round: 0, grid }
+            }
+
+            fn next(&mut self, problem: super::Problem) {
+                self.round += 1;
+                self.grid.next(problem);
+            }
+        }
+
+        pub fn solve(problem: super::Problem, filename: &str) -> Option<i32> {
+            let mut current_state = State::initialize(Grid::initialize(filename));
+            let mut previous_state = current_state.clone();
+
+            current_state.next(problem);
+            loop {
+                if current_state.grid == previous_state.grid {
+                    break;
+                }
+                previous_state = current_state.clone();
+                current_state.next(problem);
+            }
+
+            Some(current_state.grid.total_occupied() as i32)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -786,5 +1063,14 @@ mod tests {
         let p2 = aoc::day_ten::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, Some(1980));
         assert_eq!(p2, Some(4628074479616));
+    }
+
+    #[test]
+    fn day_eleven() {
+        let filename = "./misc/D11.txt";
+        let p1 = aoc::day_eleven::solve(aoc::Problem::One, filename);
+        let p2 = aoc::day_eleven::solve(aoc::Problem::Two, filename);
+        assert_eq!(p1, Some(2494));
+        assert_eq!(p2, Some(2306));
     }
 }
