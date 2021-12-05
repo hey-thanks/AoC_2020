@@ -969,6 +969,224 @@ pub mod aoc {
             Some(current_state.grid.total_occupied() as i32)
         }
     }
+
+    pub mod day_twelve {
+        use std::mem::swap;
+
+        #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+        pub enum Direction {
+            North,
+            South,
+            East,
+            West,
+            Left,
+            Right,
+            Forward,
+        }
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        pub struct Instruction {
+            direction: Direction,
+            value: isize,
+        }
+
+        impl Instruction {
+            fn new(instruction: &str) -> Instruction {
+                let dir = instruction.chars().next().expect("No direction to parse.");
+                let value: isize = instruction
+                    .get(1..)
+                    .expect("No value to parse.")
+                    .parse()
+                    .expect("Value could not be parsed into type `isize`.");
+
+                let direction = match dir {
+                    'N' => Some(Direction::North),
+                    'S' => Some(Direction::South),
+                    'E' => Some(Direction::East),
+                    'W' => Some(Direction::West),
+                    'L' => Some(Direction::Left),
+                    'R' => Some(Direction::Right),
+                    'F' => Some(Direction::Forward),
+                    _ => None,
+                };
+
+                Instruction {
+                    direction: direction.expect("Invalid direction."),
+                    value,
+                }
+            }
+        }
+
+        #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+        pub enum Facing {
+            North,
+            South,
+            East,
+            West,
+        }
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        pub struct Location {
+            x: isize,
+            y: isize,
+        }
+
+        trait State {
+            fn initialize() -> Self
+            where
+                Self: Sized;
+            fn update(&mut self, instruction: Instruction);
+            fn manhattan_distance(&self) -> isize;
+        }
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        pub struct P1State {
+            facing: Facing,
+            position: Location,
+        }
+
+        impl P1State {
+            fn turn_left(&mut self) {
+                match self.facing {
+                    Facing::North => self.facing = Facing::West,
+                    Facing::West => self.facing = Facing::South,
+                    Facing::South => self.facing = Facing::East,
+                    Facing::East => self.facing = Facing::North,
+                };
+            }
+
+            fn turn_right(&mut self) {
+                match self.facing {
+                    Facing::North => self.facing = Facing::East,
+                    Facing::East => self.facing = Facing::South,
+                    Facing::South => self.facing = Facing::West,
+                    Facing::West => self.facing = Facing::North,
+                };
+            }
+
+            fn move_forward(&mut self, value: isize) {
+                match self.facing {
+                    Facing::North => self.position.y += value,
+                    Facing::South => self.position.y -= value,
+                    Facing::East => self.position.x += value,
+                    Facing::West => self.position.x -= value,
+                };
+            }
+        }
+
+        impl State for P1State {
+            fn initialize() -> P1State {
+                P1State {
+                    facing: Facing::East,
+                    position: Location { x: 0, y: 0 },
+                }
+            }
+
+            fn update(&mut self, instruction: Instruction) {
+                match instruction.direction {
+                    Direction::Left => {
+                        let num_turns = instruction.value / 90;
+                        for _i in 0..num_turns {
+                            self.turn_left();
+                        }
+                    }
+                    Direction::Right => {
+                        let num_turns = instruction.value / 90;
+                        for _i in 0..num_turns {
+                            self.turn_right();
+                        }
+                    }
+                    Direction::North => self.position.y += instruction.value,
+                    Direction::South => self.position.y -= instruction.value,
+                    Direction::East => self.position.x += instruction.value,
+                    Direction::West => self.position.x -= instruction.value,
+                    Direction::Forward => self.move_forward(instruction.value),
+                };
+            }
+
+            fn manhattan_distance(&self) -> isize {
+                self.position.x.abs() + self.position.y.abs()
+            }
+        }
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        pub struct P2State {
+            waypoint: Location,
+            position: Location,
+        }
+
+        impl P2State {
+            fn rotate_waypoint_left(&mut self) {
+                swap(&mut self.waypoint.x, &mut self.waypoint.y);
+                self.waypoint.x *= -1;
+            }
+
+            fn rotate_waypoint_right(&mut self) {
+                swap(&mut self.waypoint.x, &mut self.waypoint.y);
+                self.waypoint.y *= -1;
+            }
+
+            fn move_forward(&mut self, value: isize) {
+                for _i in 0..value {
+                    self.position.x += self.waypoint.x;
+                    self.position.y += self.waypoint.y;
+                }
+            }
+        }
+
+        impl State for P2State {
+            fn initialize() -> P2State {
+                P2State {
+                    waypoint: Location { x: 10, y: 1 },
+                    position: Location { x: 0, y: 0 },
+                }
+            }
+
+            fn update(&mut self, instruction: Instruction) {
+                match instruction.direction {
+                    Direction::North => self.waypoint.y += instruction.value,
+                    Direction::South => self.waypoint.y -= instruction.value,
+                    Direction::East => self.waypoint.x += instruction.value,
+                    Direction::West => self.waypoint.x -= instruction.value,
+                    Direction::Left => {
+                        let num_turns = instruction.value / 90;
+                        for _i in 0..num_turns {
+                            self.rotate_waypoint_left();
+                        }
+                    }
+                    Direction::Right => {
+                        let num_turns = instruction.value / 90;
+                        for _i in 0..num_turns {
+                            self.rotate_waypoint_right();
+                        }
+                    }
+                    Direction::Forward => self.move_forward(instruction.value),
+                }
+            }
+
+            fn manhattan_distance(&self) -> isize {
+                self.position.x.abs() + self.position.y.abs()
+            }
+        }
+
+        pub fn solve(problem: super::Problem, file: &str) -> Option<isize> {
+            let instructions: Vec<Instruction> = super::lines_from_file(file)
+                .iter()
+                .map(|x| Instruction::new(x))
+                .collect();
+
+            let mut state: Box<dyn State> = match problem {
+                super::Problem::One => Box::new(P1State::initialize()),
+                super::Problem::Two => Box::new(P2State::initialize()),
+            };
+
+            for instruction in instructions {
+                state.update(instruction);
+            }
+
+            Some(state.manhattan_distance())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1072,5 +1290,14 @@ mod tests {
         let p2 = aoc::day_eleven::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, Some(2494));
         assert_eq!(p2, Some(2306));
+    }
+
+    #[test]
+    fn day_twelve() {
+        let filename = "./misc/D12.txt";
+        let p1 = aoc::day_twelve::solve(aoc::Problem::One, filename);
+        let p2 = aoc::day_twelve::solve(aoc::Problem::Two, filename);
+        assert_eq!(p1, Some(1631));
+        assert_eq!(p2, Some(58606));
     }
 }
