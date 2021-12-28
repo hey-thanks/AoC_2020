@@ -1187,6 +1187,247 @@ pub mod aoc {
             Some(state.manhattan_distance())
         }
     }
+
+    pub mod day_thirteen {
+        use crate::aoc::lines_from_file;
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        pub struct P1Bus {
+            id: usize,
+            wait_time: usize,
+        }
+
+        impl P1Bus {
+            fn new(id: usize, earliest_departure_time: usize) -> P1Bus {
+                P1Bus {
+                    id,
+                    wait_time: ((earliest_departure_time as f32 / id as f32).ceil() as usize * id)
+                        - earliest_departure_time,
+                }
+            }
+        }
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        pub struct P2Bus {
+            id: usize,
+            position: usize,
+        }
+
+        impl P2Bus {
+            fn new(id: usize, position: usize) -> P2Bus {
+                P2Bus { id, position }
+            }
+        }
+
+        pub fn solve(problem: super::Problem, filename: &str) -> Option<usize> {
+            match problem {
+                super::Problem::One => problem_one(filename),
+                super::Problem::Two => problem_two(filename),
+            }
+        }
+
+        fn problem_one(filename: &str) -> Option<usize> {
+            let input = lines_from_file(filename);
+            let earliest_departure_time: usize = input[0]
+                .parse()
+                .expect("Could not parse first line of input.");
+            let bus_ids: Vec<usize> = input[1].split(',').filter_map(|s| s.parse().ok()).collect();
+            let bus_list: Vec<P1Bus> = bus_ids
+                .iter()
+                .map(|x| P1Bus::new(*x, earliest_departure_time))
+                .collect();
+
+            let mut shortest_wait_bus = bus_list[0].clone();
+            for bus in bus_list {
+                if bus.wait_time < shortest_wait_bus.wait_time {
+                    shortest_wait_bus = bus;
+                }
+            }
+
+            Some(shortest_wait_bus.wait_time * shortest_wait_bus.id)
+        }
+
+        fn problem_two(filename: &str) -> Option<usize> {
+            let input = lines_from_file(filename);
+            // ignore input[0], as it is no longer relevant
+            let bus_ids: Vec<Option<usize>> = input[1].split(',').map(|s| s.parse().ok()).collect();
+            let mut bus_list: Vec<P2Bus> = vec![];
+            for (i, bus_id) in bus_ids.into_iter().enumerate() {
+                if let Some(x) = bus_id {
+                    bus_list.push(P2Bus::new(x, i));
+                }
+            }
+
+            let mut largest_bus_id_bus: P2Bus = P2Bus::new(0, 0);
+            for bus in &bus_list {
+                if bus.id > largest_bus_id_bus.id {
+                    largest_bus_id_bus = bus.clone();
+                }
+            }
+
+            // n is set to one-hundred billion due to the hint in the problem, which states that
+            // the timestamp we are looking for is greater than one-hundred trillion.
+            // The loop below probably takes well over 12 hours to complete.
+            let mut n: usize = 100_000_000_000;
+            loop {
+                let timestamp: usize = largest_bus_id_bus.id * n - largest_bus_id_bus.position;
+                if check_all_buses(&bus_list, timestamp) {
+                    break;
+                }
+                n += 1;
+            }
+
+            Some(largest_bus_id_bus.id * n - largest_bus_id_bus.position)
+        }
+
+        fn check_all_buses(bus_list: &[P2Bus], t: usize) -> bool {
+            for bus in bus_list {
+                if (t + bus.position) % bus.id != 0 {
+                    return false;
+                }
+            }
+            true
+        }
+    }
+
+    pub mod day_fourteen {
+        use crate::aoc::lines_from_file;
+        use itertools::Itertools;
+        use std::collections::HashMap;
+
+        struct Mask {
+            save: usize,
+            transfer: usize,
+        }
+
+        struct Memory {
+            address: usize,
+            value: usize,
+        }
+
+        struct MaskP2 {
+            xs_zeroed: usize,
+            x_positions: Vec<usize>,
+        }
+
+        pub fn solve(problem: super::Problem, filename: &str) -> Option<usize> {
+            let input = lines_from_file(filename);
+            match problem {
+                super::Problem::One => solve_p1(&input),
+                super::Problem::Two => solve_p2(&input),
+            }
+        }
+
+        fn parse_mask_p1(line: &str) -> Mask {
+            let mask = line
+                .strip_prefix("mask = ")
+                .expect("Error parsing mask assignment instruction.");
+            let transfer = usize::from_str_radix(&*mask.replace("X", "0"), 2)
+                .expect("Error parsing mask string to usize.");
+            let save = usize::from_str_radix(
+                &*mask
+                    .replace("0", "Z")
+                    .replace("1", "Z")
+                    .replace("X", "1")
+                    .replace("Z", "0"),
+                2,
+            )
+            .expect("Error parsing mask string to usize.");
+            Mask { save, transfer }
+        }
+
+        fn solve_p1(input: &[String]) -> Option<usize> {
+            let mut mask = Mask {
+                save: 0,
+                transfer: 0,
+            };
+            let mut mem = HashMap::new();
+
+            for line in input {
+                if line.contains("mask") {
+                    mask = parse_mask_p1(&line);
+                } else if line.contains("mem") {
+                    let memory = parse_assignment(&line);
+                    mem.insert(memory.address, (memory.value & mask.save) ^ mask.transfer);
+                } else {
+                    panic!("Input instructions are ill-formatted.")
+                }
+            }
+            Some(mem.values().sum())
+        }
+
+        fn solve_p2(input: &[String]) -> Option<usize> {
+            let mut mask = MaskP2 {
+                xs_zeroed: 0,
+                x_positions: vec![],
+            };
+            let mut mem = HashMap::new();
+
+            for line in input {
+                if line.contains("mask") {
+                    mask = parse_mask_p2(&line);
+                } else if line.contains("mem") {
+                    let mut memory = parse_assignment(&line);
+                    // First we zero out the x's of the mask (which is done by parse_mask_p2 and
+                    // returned as part of mask) and combine that with the address.
+                    memory.address |= mask.xs_zeroed;
+                    // Then we zero out the positions where the x's should have been.
+                    for pos in &mask.x_positions {
+                        memory.address &= !(1 << pos);
+                    }
+                    let addresses = generate_addresses(&mask, &memory);
+                    for address in addresses {
+                        mem.insert(address, memory.value);
+                    }
+                } else {
+                    panic!("Input instructions are ill-formatted.")
+                }
+            }
+            Some(mem.values().sum())
+        }
+
+        fn generate_addresses(mask: &MaskP2, memory: &Memory) -> Vec<usize> {
+            let mask_list: Vec<usize> = mask.x_positions.iter().map(|x| 1 << x).collect();
+            let mut addresses: Vec<usize> = vec![];
+            for i in 0..mask_list.len() {
+                addresses.extend(
+                    mask_list
+                        .iter()
+                        .combinations(i + 1)
+                        .map(|v| v.into_iter().sum::<usize>()),
+                );
+            }
+            addresses.iter_mut().for_each(|x| *x += memory.address);
+            addresses.push(memory.address);
+            addresses
+        }
+
+        fn parse_mask_p2(line: &str) -> MaskP2 {
+            let mask = line
+                .strip_prefix("mask = ")
+                .expect("Error parsing mask assignment instruction.");
+            let xs_zeroed = usize::from_str_radix(&*mask.replace("X", "0"), 2)
+                .expect("Error parsing mask string to usize.");
+            let x_positions = mask.match_indices('X').map(|x| 35 - x.0).collect();
+            MaskP2 {
+                xs_zeroed,
+                x_positions,
+            }
+        }
+
+        fn parse_assignment(line: &str) -> Memory {
+            let memory_instruction: Vec<&str> = line.split("] = ").collect();
+            let address = memory_instruction[0]
+                .strip_prefix("mem[")
+                .expect("Memory assignment line is ill-formatted.")
+                .parse()
+                .expect("Error parsing memory address.");
+            let value = memory_instruction[1]
+                .parse()
+                .expect("Error parsing value assigned to memory address.");
+            Memory { address, value }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1299,5 +1540,24 @@ mod tests {
         let p2 = aoc::day_twelve::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, Some(1631));
         assert_eq!(p2, Some(58606));
+    }
+
+    #[test]
+    fn day_thirteen() {
+        let filename = "./misc/D13.txt";
+        let p1 = aoc::day_thirteen::solve(aoc::Problem::One, filename);
+        assert_eq!(p1, Some(2165));
+        // Omit the second test because it would take over 12 hours to complete.
+        // let p2 = aoc::day_thirteen::solve(aoc::Problem::Two, filename);
+        // assert_eq!(p2, Some(534035653563227));
+    }
+
+    #[test]
+    fn day_fourteen() {
+        let filename = "./misc/D14.txt";
+        let p1 = aoc::day_fourteen::solve(aoc::Problem::One, filename);
+        let p2 = aoc::day_fourteen::solve(aoc::Problem::Two, filename);
+        assert_eq!(p1, Some(10452688630537));
+        assert_eq!(p2, Some(2881082759597));
     }
 }
