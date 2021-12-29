@@ -1428,6 +1428,60 @@ pub mod aoc {
             Memory { address, value }
         }
     }
+
+    pub mod day_fifteen {
+        use crate::aoc::lines_from_file;
+        use std::collections::HashMap;
+
+        pub fn solve(problem: super::Problem, filename: &str) -> Option<usize> {
+            let input = lines_from_file(filename);
+            let starting_numbers: Vec<usize> = input[0]
+                .split(',')
+                .map(|n| n.parse().expect("Could not parse starting number."))
+                .collect();
+            let final_turn = match problem {
+                super::Problem::One => 2020,
+                super::Problem::Two => 30_000_000,
+            };
+
+            let mut sequence: HashMap<usize, Vec<usize>> = HashMap::new();
+            let mut turn = 1;
+            for num in &starting_numbers {
+                sequence.insert(*num, vec![turn]);
+                turn += 1;
+            }
+
+            let mut most_recent_num = *starting_numbers
+                .last()
+                .expect("List of starting numbers is empty.");
+
+            loop {
+                if turn == final_turn + 1 {
+                    return Some(most_recent_num);
+                }
+                // The next line is guaranteed to not fail (most_recent_num will be present
+                // because by definition, it is the last thing we added to sequence).
+                if sequence.get(&most_recent_num).unwrap().len() == 1
+                {
+                    sequence
+                        .entry(0)
+                        .and_modify(|e| e.push(turn))
+                        .or_insert_with(|| vec![turn]);
+                    most_recent_num = 0;
+                } else {
+                    // The next line is guaranteed to not fail (most_recent_num will be present
+                    // because by definition, it is the last thing we added to sequence).
+                    let prev_turns = sequence.get(&most_recent_num).unwrap();
+                    let next_num = prev_turns[prev_turns.len() - 1] - prev_turns[prev_turns.len() - 2];
+                    sequence.entry(next_num)
+                        .and_modify(|e| e.push(turn))
+                        .or_insert_with(|| vec![turn]);
+                    most_recent_num = next_num;
+                }
+                turn += 1;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1559,5 +1613,14 @@ mod tests {
         let p2 = aoc::day_fourteen::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, Some(10452688630537));
         assert_eq!(p2, Some(2881082759597));
+    }
+
+    #[test]
+    fn day_fifteen() {
+        let filename = "./misc/D15.txt";
+        let p1 = aoc::day_fifteen::solve(aoc::Problem::One, filename);
+        let p2 = aoc::day_fifteen::solve(aoc::Problem::Two, filename);
+        assert_eq!(p1, Some(403));
+        assert_eq!(p2, Some(6823));
     }
 }
