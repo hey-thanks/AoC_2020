@@ -1444,8 +1444,8 @@ pub mod aoc {
                 super::Problem::Two => 30_000_000,
             };
 
-            let mut sequence: HashMap<usize, Vec<usize>> = HashMap::new();
-            let mut turn = 1;
+            let mut sequence = HashMap::new();
+            let mut turn: usize = 1;
             for num in &starting_numbers {
                 sequence.insert(*num, vec![turn]);
                 turn += 1;
@@ -1461,8 +1461,7 @@ pub mod aoc {
                 }
                 // The next line is guaranteed to not fail (most_recent_num will be present
                 // because by definition, it is the last thing we added to sequence).
-                if sequence.get(&most_recent_num).unwrap().len() == 1
-                {
+                if sequence.get(&most_recent_num).unwrap().len() == 1 {
                     sequence
                         .entry(0)
                         .and_modify(|e| e.push(turn))
@@ -1472,14 +1471,223 @@ pub mod aoc {
                     // The next line is guaranteed to not fail (most_recent_num will be present
                     // because by definition, it is the last thing we added to sequence).
                     let prev_turns = sequence.get(&most_recent_num).unwrap();
-                    let next_num = prev_turns[prev_turns.len() - 1] - prev_turns[prev_turns.len() - 2];
-                    sequence.entry(next_num)
+                    let next_num =
+                        prev_turns[prev_turns.len() - 1] - prev_turns[prev_turns.len() - 2];
+                    sequence
+                        .entry(next_num)
                         .and_modify(|e| e.push(turn))
                         .or_insert_with(|| vec![turn]);
                     most_recent_num = next_num;
                 }
                 turn += 1;
             }
+        }
+    }
+
+    pub mod day_sixteen {
+        use crate::aoc::lines_from_file;
+        use itertools::Itertools;
+        use std::collections::HashSet;
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        struct ValidRange {
+            begin: usize,
+            end: usize,
+        }
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        struct Category {
+            name: String,
+            valid_ranges: (ValidRange, ValidRange),
+        }
+
+        impl Category {
+            fn is_num_valid(&self, num: &usize) -> bool {
+                (self.valid_ranges.0.begin..=self.valid_ranges.0.end).contains(num)
+                    || (self.valid_ranges.1.begin..=self.valid_ranges.1.end).contains(num)
+            }
+        }
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        struct Info {
+            categories: Vec<Category>,
+            my_ticket: Vec<usize>,
+            nearby_tickets: Vec<Vec<usize>>,
+        }
+
+        pub fn solve(problem: super::Problem, filename: &str) -> Option<usize> {
+            let input = lines_from_file(filename);
+            let collected_info = parse_input(&input);
+
+            let mut invalid_values: Vec<usize> = vec![];
+            let mut invalid_tickets: HashSet<Vec<usize>> = HashSet::new();
+            for ticket in &collected_info.nearby_tickets {
+                for num in ticket {
+                    if !valid_number(*num, &collected_info.categories) {
+                        invalid_values.push(*num);
+                        invalid_tickets.insert(ticket.clone());
+                    }
+                }
+            }
+
+            let valid_tickets: Vec<&Vec<usize>> = collected_info
+                .nearby_tickets
+                .iter()
+                .filter(|&x| !invalid_tickets.contains(x))
+                .collect();
+            let all_possible_label_positions = calculate_positions(&valid_tickets, &collected_info);
+            let mut refined_possible_label_positions = refine_positions(
+                &all_possible_label_positions,
+                &collected_info,
+                valid_tickets.len(),
+            );
+            let labels =
+                calculate_final_labels(&collected_info, &mut refined_possible_label_positions);
+
+            let mut total = 1;
+            for (i, label) in labels.iter().enumerate() {
+                if label.contains("departure") {
+                    total *= collected_info.my_ticket[i];
+                }
+            }
+
+            match problem {
+                super::Problem::One => Some(invalid_values.iter().sum()),
+                super::Problem::Two => Some(total),
+            }
+        }
+
+        fn calculate_positions(
+            valid_tickets: &Vec<&Vec<usize>>,
+            info: &Info,
+        ) -> Vec<Vec<HashSet<String>>> {
+            let mut result: Vec<Vec<HashSet<String>>> = vec![];
+            for ticket in valid_tickets {
+                result.push(vec![]);
+                for num in ticket.iter() {
+                    let valid_set: HashSet<String> = info
+                        .categories
+                        .iter()
+                        .filter(|c| c.is_num_valid(num))
+                        .map(|c| c.name.to_string())
+                        .collect();
+                    result.last_mut().unwrap().push(valid_set);
+                }
+            }
+            result
+        }
+
+        fn refine_positions(
+            possible_positions: &Vec<Vec<HashSet<String>>>,
+            info: &Info,
+            num_valid_tickets: usize,
+        ) -> Vec<HashSet<String>> {
+            let mut reduced_set = vec![];
+            for i in 0..info.categories.len() {
+                let mut set = possible_positions[0][i].to_owned();
+                for j in 0..num_valid_tickets - 1 {
+                    set = set
+                        .intersection(&possible_positions[j + 1][i])
+                        .cloned()
+                        .collect();
+                }
+                reduced_set.push(set);
+            }
+            reduced_set
+        }
+
+        fn calculate_final_labels(
+            info: &Info,
+            possible_label_positions: &mut Vec<HashSet<String>>,
+        ) -> Vec<String> {
+            let mut labels: Vec<String> = vec![];
+            for _ in 0..info.categories.len() {
+                labels.push("".to_string());
+            }
+            loop {
+                if !labels.iter().any(|s| s.is_empty()) {
+                    break;
+                }
+                for (i, possible_labels) in possible_label_positions.iter().enumerate() {
+                    if possible_labels.len() == 1 {
+                        labels[i] = possible_labels.iter().collect_vec()[0].to_string();
+                    }
+                }
+                for label in &labels {
+                    for elem in possible_label_positions.iter_mut() {
+                        elem.remove(label);
+                    }
+                }
+            }
+            labels
+        }
+
+        fn valid_number(num: usize, categories: &[Category]) -> bool {
+            for category in categories {
+                if category.is_num_valid(&num) {
+                    return true;
+                }
+            }
+            false
+        }
+
+        fn parse_input(input: &[String]) -> Info {
+            let mut categories: Vec<Category> = vec![];
+            let mut my_ticket: Vec<usize> = vec![];
+            let mut nearby_tickets: Vec<Vec<usize>> = vec![];
+            let mut index: usize = 0;
+            loop {
+                if index >= input.len() {
+                    break;
+                }
+                let line = &input[index];
+                if line.contains(" or ") {
+                    let range_definition: Vec<&str> = line.split(": ").collect();
+                    let name = range_definition[0].to_string();
+                    let valid_ranges = range_definition[1]
+                        .split(" or ")
+                        .map(|s| parse_range(s))
+                        .collect_tuple()
+                        .expect("Error parsing range.");
+                    categories.push(Category { name, valid_ranges });
+                    index += 1;
+                } else if line.contains("your") {
+                    index += 1;
+                    my_ticket = parse_ticket(&input[index]);
+                    index += 1;
+                } else if line.contains("nearby") {
+                    index += 1;
+                    while index < input.len() {
+                        nearby_tickets.push(parse_ticket(&input[index]));
+                        index += 1;
+                    }
+                } else {
+                    index += 1;
+                }
+            }
+            Info {
+                categories,
+                my_ticket,
+                nearby_tickets,
+            }
+        }
+
+        fn parse_range(range: &str) -> ValidRange {
+            let num_range: Vec<&str> = range.split('-').collect();
+            ValidRange {
+                begin: num_range[0]
+                    .parse()
+                    .expect("Could not parse range beginning."),
+                end: num_range[1].parse().expect("Could not parse range end."),
+            }
+        }
+
+        fn parse_ticket(line: &str) -> Vec<usize> {
+            let numbers: Vec<&str> = line.split(',').collect();
+            numbers
+                .iter()
+                .map(|x| x.parse().expect("Could not parse ticket number."))
+                .collect()
         }
     }
 }
@@ -1619,8 +1827,18 @@ mod tests {
     fn day_fifteen() {
         let filename = "./misc/D15.txt";
         let p1 = aoc::day_fifteen::solve(aoc::Problem::One, filename);
-        let p2 = aoc::day_fifteen::solve(aoc::Problem::Two, filename);
+        // This test takes significantly longer than the others to run. (~60 sec vs ~6 sec)
+        // let p2 = aoc::day_fifteen::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, Some(403));
-        assert_eq!(p2, Some(6823));
+        // assert_eq!(p2, Some(6823));
+    }
+
+    #[test]
+    fn day_sixteen() {
+        let filename = "./misc/D16.txt";
+        let p1 = aoc::day_sixteen::solve(aoc::Problem::One, filename);
+        let p2 = aoc::day_sixteen::solve(aoc::Problem::Two, filename);
+        assert_eq!(p1, Some(26053));
+        assert_eq!(p2, Some(1515506256421));
     }
 }
