@@ -1558,7 +1558,7 @@ pub mod aoc {
         }
 
         fn calculate_positions(
-            valid_tickets: &Vec<&Vec<usize>>,
+            valid_tickets: &[&Vec<usize>],
             info: &Info,
         ) -> Vec<Vec<HashSet<String>>> {
             let mut result: Vec<Vec<HashSet<String>>> = vec![];
@@ -1578,7 +1578,7 @@ pub mod aoc {
         }
 
         fn refine_positions(
-            possible_positions: &Vec<Vec<HashSet<String>>>,
+            possible_positions: &[Vec<HashSet<String>>],
             info: &Info,
             num_valid_tickets: usize,
         ) -> Vec<HashSet<String>> {
@@ -1688,6 +1688,121 @@ pub mod aoc {
                 .iter()
                 .map(|x| x.parse().expect("Could not parse ticket number."))
                 .collect()
+        }
+    }
+
+    pub mod day_seventeen {
+        use crate::aoc::lines_from_file;
+        use std::collections::BTreeSet;
+        use std::convert::TryFrom;
+
+        #[derive(Debug, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
+        struct Point<T> {
+            x: T,
+            y: T,
+            z: T,
+            w: T,
+        }
+
+        pub fn solve(problem: super::Problem, filename: &str) -> Option<usize> {
+            let input = lines_from_file(filename);
+            let active = parse_initial_state(problem, &input);
+            let mut inactive = generate_inactive_set(problem);
+            inactive.retain(|p| !active.contains(p));
+
+            let final_active_total = run_cycles(6, active, inactive);
+
+            Some(final_active_total)
+        }
+
+        fn run_cycles(num_cycles: usize, mut active: BTreeSet<Point<isize>>, mut inactive: BTreeSet<Point<isize>>) -> usize {
+            for _i in 0..num_cycles {
+                let active_copy = active.clone();
+                let inactive_copy = inactive.clone();
+                for point in &active_copy {
+                    let active_count = count_active_neighbors(point, &active_copy);
+                    if !(2..=3).contains(&active_count) {
+                        active.remove(point);
+                        inactive.insert(point.clone());
+                    }
+                }
+                for point in &inactive_copy {
+                    let active_count = count_active_neighbors(point, &active_copy);
+                    if active_count == 3 {
+                        active.insert(point.clone());
+                        inactive.remove(point);
+                    }
+                }
+            }
+            active.len()
+        }
+
+        fn count_active_neighbors(point: &Point<isize>, active: &BTreeSet<Point<isize>>) -> usize {
+            active
+                .iter()
+                .filter(|&p| {
+                    (p.x - point.x != 0)
+                        || (p.y - point.y != 0)
+                        || (p.z - point.z != 0)
+                        || (p.w - point.w != 0)
+                })
+                .filter(|&p| {
+                    ((p.x - point.x).abs() <= 1)
+                        && ((p.y - point.y).abs() <= 1)
+                        && ((p.z - point.z).abs() <= 1)
+                        && ((p.w - point.w).abs() <= 1)
+                })
+                .count()
+        }
+
+        fn parse_initial_state(problem: super::Problem, input: &[String]) -> BTreeSet<Point<isize>> {
+            let mut active = BTreeSet::new();
+            for (y, line) in input.iter().enumerate() {
+                for (x, char) in line.chars().into_iter().enumerate() {
+                    if char == '#' {
+                        match problem {
+                            super::Problem::One => {
+                                active.insert(Point {
+                                    x: isize::try_from(x).unwrap() + 11,
+                                    y: isize::try_from(y).unwrap() + 11,
+                                    z: 12,
+                                    w: 0,
+                                });
+                            }
+                            super::Problem::Two => {
+                                active.insert(Point {
+                                    x: isize::try_from(x).unwrap() + 11,
+                                    y: isize::try_from(y).unwrap() + 11,
+                                    z: 12,
+                                    w: 12,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            active
+        }
+
+        fn generate_inactive_set(problem: super::Problem) -> BTreeSet<Point<isize>> {
+            let mut inactive = BTreeSet::new();
+            for x in 0..25 {
+                for y in 0..25 {
+                    for z in 0..25 {
+                        match problem {
+                            super::Problem::One => {
+                                inactive.insert(Point { x, y, z, w: 0 });
+                            }
+                            super::Problem::Two => {
+                                for w in 0..25 {
+                                    inactive.insert(Point { x, y, z, w });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            inactive
         }
     }
 }
@@ -1840,5 +1955,14 @@ mod tests {
         let p2 = aoc::day_sixteen::solve(aoc::Problem::Two, filename);
         assert_eq!(p1, Some(26053));
         assert_eq!(p2, Some(1515506256421));
+    }
+
+    #[test]
+    fn day_seventeen() {
+        let filename = "./misc/D17.txt";
+        let p1 = aoc::day_seventeen::solve(aoc::Problem::One, filename);
+        let p2 = aoc::day_seventeen::solve(aoc::Problem::Two, filename);
+        assert_eq!(p1, Some(336));
+        assert_eq!(p2, Some(2620));
     }
 }
